@@ -45,14 +45,15 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Mount main API routes router
+// Mount main API routes router on both /api and root
 app.use('/api', apiRoutes);
+app.use('/', apiRoutes);
 
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
