@@ -143,10 +143,13 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
-              <label className="text-xs font-medium mb-2 block" style={{ color: '#848E9C' }}>Email Address</label>
+              <label htmlFor="login-email" className="text-xs font-medium mb-2 block" style={{ color: '#848E9C' }}>Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#474D57' }} />
                 <input
+                  id="login-email"
+                  name="email"
+                  autoComplete="email"
                   type="email" value={email} onChange={e => { setEmail(e.target.value); if (error) setError(''); }}
                   placeholder="trader@example.com"
                   className="w-full h-12 pl-10 pr-4 rounded-lg text-sm outline-none transition-all"
@@ -161,12 +164,15 @@ export default function LoginPage() {
             {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium" style={{ color: '#848E9C' }}>Password</label>
+                <label htmlFor="login-password" className="text-xs font-medium" style={{ color: '#848E9C' }}>Password</label>
                 <a href="#" className="text-xs hover:underline" style={{ color: '#3B82F6' }}>Forgot password?</a>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#474D57' }} />
                 <input
+                  id="login-password"
+                  name="password"
+                  autoComplete="current-password"
                   type={showPassword ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
                   placeholder="Enter your password"
                   className="w-full h-12 pl-10 pr-12 rounded-lg text-sm outline-none transition-all"

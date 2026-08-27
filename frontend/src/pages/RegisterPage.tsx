@@ -206,10 +206,13 @@ export default function RegisterPage() {
               <div className="space-y-5">
                 {/* Full Name */}
                 <div>
-                  <label className="text-xs font-medium mb-2 block" style={{ color: '#848E9C' }}>Full Name</label>
+                  <label htmlFor="reg-name" className="text-xs font-medium mb-2 block" style={{ color: '#848E9C' }}>Full Name</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#474D57' }} />
                     <input
+                      id="reg-name"
+                      name="name"
+                      autoComplete="name"
                       type="text" value={form.name} onChange={e => update('name', e.target.value)}
                       placeholder="John Smith"
                       className="w-full h-12 pl-10 pr-4 rounded-lg text-sm outline-none transition-all"
@@ -222,10 +225,13 @@ export default function RegisterPage() {
 
                 {/* Email */}
                 <div>
-                  <label className="text-xs font-medium mb-2 block" style={{ color: '#848E9C' }}>Email Address</label>
+                  <label htmlFor="reg-email" className="text-xs font-medium mb-2 block" style={{ color: '#848E9C' }}>Email Address</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#474D57' }} />
                     <input
+                      id="reg-email"
+                      name="email"
+                      autoComplete="email"
                       type="email" value={form.email} onChange={e => update('email', e.target.value)}
                       placeholder="trader@example.com"
                       className="w-full h-12 pl-10 pr-4 rounded-lg text-sm outline-none transition-all"
@@ -238,13 +244,16 @@ export default function RegisterPage() {
 
                 {/* Phone */}
                 <div>
-                  <label className="text-xs font-medium mb-2 flex items-center justify-between" style={{ color: '#848E9C' }}>
+                  <label htmlFor="reg-phone" className="text-xs font-medium mb-2 flex items-center justify-between" style={{ color: '#848E9C' }}>
                     Phone Number
                     <span className="text-xs" style={{ color: '#474D57' }}>Optional</span>
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#474D57' }} />
                     <input
+                      id="reg-phone"
+                      name="phone"
+                      autoComplete="tel"
                       type="tel" value={form.phone} onChange={e => update('phone', e.target.value)}
                       placeholder="+1 (555) 000-0000"
                       className="w-full h-12 pl-10 pr-4 rounded-lg text-sm outline-none transition-all"
