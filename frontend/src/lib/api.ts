@@ -1,14 +1,19 @@
 const getInitialApiBase = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:4000';
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:4000';
+    }
+    // On Vercel or custom domain, default to same-origin relative API
+    return '';
   }
-  return 'https://api.optionaly.com';
+  return '';
 };
 const rawApiBase = getInitialApiBase();
-const API_BASE = rawApiBase.replace(/\/+$/, '');
+const API_BASE = rawApiBase ? rawApiBase.replace(/\/+$/, '') : '';
 
-export const API_URL = API_BASE;
+export const API_URL = API_BASE || (typeof window !== 'undefined' ? window.location.origin : '');
+
 
 /**
  * Enhanced fetch wrapper with automatic retry capabilities to handle transient network errors
