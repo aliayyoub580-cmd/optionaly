@@ -345,3 +345,7 @@ if (!isNaN(parsedPort)) {
   });
 }
 
+module.exports = app;
+module.exports.server = server;
+
+
