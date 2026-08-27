@@ -281,71 +281,62 @@ io.on('connection', (socket) => {
 const { runAutoMigrations } = require('./utils/migrate-platform');
 const { startDepositReconciliationSweep } = require('./controllers/paymentController');
 
-if (!isNaN(parsedPort)) {
-  // Bind to TCP Port (convert string to number, omit host parameter)
-  server.listen(parsedPort, () => {
-    console.log(`[Backend] Express server running on TCP Port: ${parsedPort}`);
-    console.log(`[Backend] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[Backend] Node.js version: ${process.version}`);
-    console.log(`[Backend] Database: Supabase / PostgreSQL`);
-    // FIX: runAutoMigrations() is async and creates the `candles` table.
-    // It used to be fire-and-forget, so priceEngine.start() raced it and ran
-    // SELECT COUNT(*) FROM candles before the table existed. That query threw,
-    // was swallowed by the engine's try/catch, and seeding silently never ran,
-    // leaving the market with no stored history at all.
-    runAutoMigrations()
-      .catch((e) => console.error('[Backend] Migration error:', e.message))
-      .finally(() => {
-        priceEngine.start(io);
-        startDepositReconciliationSweep();
-        const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
-        const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
-        setInterval(() => {
+// Only start standalone HTTP server and background workers when running directly (not in Vercel serverless)
+if (require.main === module && !process.env.VERCEL) {
+  if (!isNaN(parsedPort)) {
+    // Bind to TCP Port
+    server.listen(parsedPort, () => {
+      console.log(`[Backend] Express server running on TCP Port: ${parsedPort}`);
+      console.log(`[Backend] Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`[Backend] Database: Supabase / PostgreSQL`);
+
+      runAutoMigrations()
+        .catch((e) => console.error('[Backend] Migration error:', e.message))
+        .finally(() => {
+          priceEngine.start(io);
+          startDepositReconciliationSweep();
+          const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
+          const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
+          setInterval(() => {
+            autoProcessUnbonusedDeposits().catch(() => {});
+            sweepPendingCryptoDeposits().catch(() => {});
+          }, 10000);
           autoProcessUnbonusedDeposits().catch(() => {});
           sweepPendingCryptoDeposits().catch(() => {});
-        }, 10000);
-        // Initial sweeps on startup
-        autoProcessUnbonusedDeposits().catch(() => {});
-        sweepPendingCryptoDeposits().catch(() => {});
-      });
-  }).on('error', (err) => {
-    console.error(`[Backend] FATAL: Failed to start server on TCP port ${parsedPort}: ${err.message}`);
-    process.exit(1);
-  });
-} else {
-  // Bind to Unix Domain Socket / Named Pipe path (leave as string)
-  server.listen(port, () => {
-    console.log(`[Backend] Express server running on Unix Socket/Pipe: ${port}`);
-    console.log(`[Backend] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[Backend] Node.js version: ${process.version}`);
-    console.log(`[Backend] Database: Supabase / PostgreSQL`);
-    // FIX: runAutoMigrations() is async and creates the `candles` table.
-    // It used to be fire-and-forget, so priceEngine.start() raced it and ran
-    // SELECT COUNT(*) FROM candles before the table existed. That query threw,
-    // was swallowed by the engine's try/catch, and seeding silently never ran,
-    // leaving the market with no stored history at all.
-    runAutoMigrations()
-      .catch((e) => console.error('[Backend] Migration error:', e.message))
-      .finally(() => {
-        priceEngine.start(io);
-        startDepositReconciliationSweep();
-        const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
-        const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
-        setInterval(() => {
+        });
+    }).on('error', (err) => {
+      console.error(`[Backend] FATAL: Failed to start server on TCP port ${parsedPort}: ${err.message}`);
+      process.exit(1);
+    });
+  } else {
+    // Bind to Unix Domain Socket
+    server.listen(port, () => {
+      console.log(`[Backend] Express server running on Unix Socket: ${port}`);
+      console.log(`[Backend] Database: Supabase / PostgreSQL`);
+
+      runAutoMigrations()
+        .catch((e) => console.error('[Backend] Migration error:', e.message))
+        .finally(() => {
+          priceEngine.start(io);
+          startDepositReconciliationSweep();
+          const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
+          const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
+          setInterval(() => {
+            autoProcessUnbonusedDeposits().catch(() => {});
+            sweepPendingCryptoDeposits().catch(() => {});
+          }, 10000);
           autoProcessUnbonusedDeposits().catch(() => {});
           sweepPendingCryptoDeposits().catch(() => {});
-        }, 10000);
-        // Initial sweeps on startup
-        autoProcessUnbonusedDeposits().catch(() => {});
-        sweepPendingCryptoDeposits().catch(() => {});
-      });
-  }).on('error', (err) => {
-    console.error(`[Backend] FATAL: Failed to start server on socket ${port}: ${err.message}`);
-    process.exit(1);
-  });
+        });
+    }).on('error', (err) => {
+      console.error(`[Backend] FATAL: Failed to start server on socket ${port}: ${err.message}`);
+      process.exit(1);
+    });
+  }
 }
 
 module.exports = app;
 module.exports.server = server;
+
 
 
