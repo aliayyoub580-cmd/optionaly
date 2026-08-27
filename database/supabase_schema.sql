@@ -1,0 +1,479 @@
+-- =========================================================================
+-- OPTIONALY TRADING PLATFORM — COMPLETE SUPABASE (POSTGRESQL) SCHEMA
+-- =========================================================================
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 1. USERS TABLE
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  email VARCHAR(191) UNIQUE NOT NULL,
+  name VARCHAR(191) NOT NULL,
+  phone VARCHAR(191) DEFAULT NULL,
+  country VARCHAR(191) DEFAULT NULL,
+  password VARCHAR(255) NOT NULL,
+  avatar VARCHAR(500) DEFAULT NULL,
+  role VARCHAR(191) NOT NULL DEFAULT 'user',
+  "accountType" VARCHAR(191) NOT NULL DEFAULT 'demo',
+  balance DOUBLE PRECISION NOT NULL DEFAULT 10000,
+  "demoBalance" DOUBLE PRECISION NOT NULL DEFAULT 10000,
+  "realBalance" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "referralBalance" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "kycStatus" VARCHAR(50) NOT NULL DEFAULT 'none',
+  "kycDocument" VARCHAR(255) DEFAULT NULL,
+  "kycSubmittedAt" TIMESTAMPTZ DEFAULT NULL,
+  "kycRejectionReason" VARCHAR(255) DEFAULT NULL,
+  "referralCode" VARCHAR(50) UNIQUE DEFAULT NULL,
+  "referredBy" VARCHAR(191) DEFAULT NULL,
+  "isBlocked" BOOLEAN NOT NULL DEFAULT false,
+  "isVerified" BOOLEAN NOT NULL DEFAULT false,
+  "vipLevel" INT NOT NULL DEFAULT 0,
+  "totalDeposit" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "totalWithdrawal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+CREATE INDEX IF NOT EXISTS idx_users_referralCode ON users ("referralCode");
+CREATE INDEX IF NOT EXISTS idx_users_referredBy ON users ("referredBy");
+
+-- 2. ASSETS TABLE
+CREATE TABLE IF NOT EXISTS assets (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  symbol VARCHAR(191) UNIQUE NOT NULL,
+  name VARCHAR(191) NOT NULL,
+  type VARCHAR(191) NOT NULL DEFAULT 'crypto',
+  payout DOUBLE PRECISION NOT NULL DEFAULT 85,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "displayOrder" INT NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_assets_symbol ON assets (symbol);
+
+-- 3. CANDLES TABLE
+CREATE TABLE IF NOT EXISTS candles (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  symbol VARCHAR(50) NOT NULL,
+  timeframe INT NOT NULL,
+  timestamp BIGINT NOT NULL,
+  open DOUBLE PRECISION NOT NULL,
+  high DOUBLE PRECISION NOT NULL,
+  low DOUBLE PRECISION NOT NULL,
+  close DOUBLE PRECISION NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT idx_sym_tf_ts UNIQUE (symbol, timeframe, timestamp)
+);
+CREATE INDEX IF NOT EXISTS idx_candles_sym_tf ON candles (symbol, timeframe);
+CREATE INDEX IF NOT EXISTS idx_candles_ts ON candles (timestamp);
+
+-- 4. TRADES TABLE
+CREATE TABLE IF NOT EXISTS trades (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  "assetId" VARCHAR(191) NOT NULL,
+  direction VARCHAR(191) NOT NULL,
+  amount DOUBLE PRECISION NOT NULL,
+  payout DOUBLE PRECISION NOT NULL DEFAULT 85,
+  "entryPrice" DOUBLE PRECISION NOT NULL,
+  "exitPrice" DOUBLE PRECISION DEFAULT NULL,
+  status VARCHAR(191) NOT NULL DEFAULT 'open',
+  profit DOUBLE PRECISION DEFAULT NULL,
+  "periodId" VARCHAR(191) DEFAULT NULL,
+  "spreadPct" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "expirySeconds" INT NOT NULL DEFAULT 60,
+  "openedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "closedAt" TIMESTAMPTZ DEFAULT NULL,
+  "userAccountType" VARCHAR(50) NOT NULL DEFAULT 'demo',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_trades_userId ON trades ("userId");
+CREATE INDEX IF NOT EXISTS idx_trades_status ON trades (status);
+CREATE INDEX IF NOT EXISTS idx_trades_openedAt ON trades ("openedAt");
+CREATE INDEX IF NOT EXISTS idx_trades_periodId ON trades ("periodId");
+
+-- 5. TRANSACTIONS TABLE
+CREATE TABLE IF NOT EXISTS transactions (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  type VARCHAR(191) NOT NULL,
+  amount DOUBLE PRECISION NOT NULL,
+  status VARCHAR(191) NOT NULL DEFAULT 'pending',
+  method VARCHAR(191) NOT NULL DEFAULT 'crypto',
+  note VARCHAR(191) DEFAULT NULL,
+  "paymentId" VARCHAR(191) DEFAULT NULL,
+  "payAddress" VARCHAR(191) DEFAULT NULL,
+  "payAmount" DOUBLE PRECISION DEFAULT NULL,
+  "payCurrency" VARCHAR(50) DEFAULT NULL,
+  "payStatus" VARCHAR(191) DEFAULT NULL,
+  "invoiceUrl" VARCHAR(255) DEFAULT NULL,
+  gateway VARCHAR(50) DEFAULT 'crypto',
+  "payType" VARCHAR(50) DEFAULT NULL,
+  "depositCode" VARCHAR(191) DEFAULT NULL,
+  "accountTitle" VARCHAR(191) DEFAULT NULL,
+  "accountNumber" VARCHAR(191) DEFAULT NULL,
+  "bankName" VARCHAR(191) DEFAULT NULL,
+  "proofUrl" VARCHAR(255) DEFAULT NULL,
+  "payoutStatus" VARCHAR(50) DEFAULT NULL,
+  "rejectionReason" TEXT DEFAULT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_transactions_userId ON transactions ("userId");
+CREATE INDEX IF NOT EXISTS idx_transactions_type_status ON transactions (type, status);
+
+-- 6. SETTINGS TABLE
+CREATE TABLE IF NOT EXISTS settings (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  key VARCHAR(191) UNIQUE NOT NULL,
+  value TEXT DEFAULT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_settings_key ON settings (key);
+
+-- 7. COMMISSION LEVELS TABLE
+CREATE TABLE IF NOT EXISTS commission_levels (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  level INT UNIQUE NOT NULL,
+  percentage DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 8. COMMISSIONS TABLE
+CREATE TABLE IF NOT EXISTS commissions (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  "fromUserId" VARCHAR(191) NOT NULL,
+  amount DOUBLE PRECISION NOT NULL,
+  level INT NOT NULL DEFAULT 1,
+  type VARCHAR(50) NOT NULL DEFAULT 'trade',
+  status VARCHAR(50) NOT NULL DEFAULT 'paid',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_commissions_userId ON commissions ("userId");
+
+-- 9. REFERRALS TABLE
+CREATE TABLE IF NOT EXISTS referrals (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "referrerId" VARCHAR(191) NOT NULL,
+  "referredId" VARCHAR(191) UNIQUE NOT NULL,
+  level INT NOT NULL DEFAULT 1,
+  "commissionEarned" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  status VARCHAR(191) NOT NULL DEFAULT 'active',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrerId ON referrals ("referrerId");
+CREATE INDEX IF NOT EXISTS idx_referrals_referredId ON referrals ("referredId");
+
+-- 10. REFERRAL DEPOSIT BONUSES TABLE
+CREATE TABLE IF NOT EXISTS referral_deposit_bonuses (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "referrerId" VARCHAR(191) NOT NULL,
+  "depositorId" VARCHAR(191) NOT NULL,
+  "depositorName" VARCHAR(191) NOT NULL,
+  "depositAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "bonusPercentage" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "bonusAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  level INT NOT NULL DEFAULT 1,
+  status VARCHAR(191) NOT NULL DEFAULT 'pending',
+  "depositTxId" VARCHAR(191) DEFAULT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "claimedAt" TIMESTAMPTZ DEFAULT NULL,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ref_dep_bonuses_referrer ON referral_deposit_bonuses ("referrerId");
+
+-- 11. TRADE BONUSES TABLE
+CREATE TABLE IF NOT EXISTS trade_bonuses (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "leaderId" VARCHAR(191) NOT NULL,
+  "traderId" VARCHAR(191) NOT NULL,
+  "traderName" VARCHAR(191) NOT NULL,
+  "traderEmail" VARCHAR(191) NOT NULL,
+  "assetSymbol" VARCHAR(191) NOT NULL,
+  "tradeAmount" DOUBLE PRECISION NOT NULL,
+  "bonusPercentage" DOUBLE PRECISION NOT NULL,
+  "bonusAmount" DOUBLE PRECISION NOT NULL,
+  "tradeDirection" VARCHAR(191) NOT NULL,
+  "tradeStatus" VARCHAR(191) NOT NULL,
+  status VARCHAR(191) NOT NULL DEFAULT 'pending',
+  "tradeId" VARCHAR(191) DEFAULT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "claimedAt" TIMESTAMPTZ DEFAULT NULL,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_leader_trade_pct UNIQUE ("leaderId", "tradeId", "bonusPercentage")
+);
+CREATE INDEX IF NOT EXISTS idx_trade_bonuses_leaderId ON trade_bonuses ("leaderId");
+
+-- 12. MASTER TRADERS TABLE
+CREATE TABLE IF NOT EXISTS master_traders (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name VARCHAR(191) NOT NULL,
+  avatar VARCHAR(500) DEFAULT NULL,
+  "winRate" DOUBLE PRECISION NOT NULL DEFAULT 75,
+  "totalTrades" INT NOT NULL DEFAULT 0,
+  "totalCopiers" INT NOT NULL DEFAULT 0,
+  "totalProfit" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "minCopyAmount" DOUBLE PRECISION NOT NULL DEFAULT 50,
+  "maxCopyAmount" DOUBLE PRECISION NOT NULL DEFAULT 5000,
+  "defaultCopyAmount" DOUBLE PRECISION NOT NULL DEFAULT 100,
+  "durationDays" INT NOT NULL DEFAULT 7,
+  fee DOUBLE PRECISION NOT NULL DEFAULT 10,
+  status VARCHAR(50) NOT NULL DEFAULT 'active',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. USER COPY TRADES TABLE
+CREATE TABLE IF NOT EXISTS user_copy_trades (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  "masterTraderId" VARCHAR(191) NOT NULL,
+  amount DOUBLE PRECISION NOT NULL DEFAULT 100,
+  "copyAmount" DOUBLE PRECISION NOT NULL DEFAULT 100,
+  status VARCHAR(191) NOT NULL DEFAULT 'active',
+  "totalInvested" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "totalProfit" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "totalTrades" INT NOT NULL DEFAULT 0,
+  "wonTrades" INT NOT NULL DEFAULT 0,
+  "durationDays" INT NOT NULL DEFAULT 7,
+  "startDate" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "endDate" TIMESTAMPTZ DEFAULT NULL,
+  "claimStatus" VARCHAR(50) NOT NULL DEFAULT 'unclaimed',
+  "profitClaimed" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_user_copy_trades_user ON user_copy_trades ("userId");
+CREATE INDEX IF NOT EXISTS idx_user_copy_trades_trader ON user_copy_trades ("masterTraderId");
+
+-- 14. CHAT MESSAGES TABLE
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "chatRoomId" VARCHAR(191) NOT NULL,
+  "senderRole" VARCHAR(50) NOT NULL,
+  "senderName" VARCHAR(191) NOT NULL,
+  content TEXT NOT NULL,
+  "attachmentUrl" VARCHAR(255) DEFAULT NULL,
+  "attachmentType" VARCHAR(50) DEFAULT NULL,
+  "attachmentName" VARCHAR(255) DEFAULT NULL,
+  "attachmentSize" INT DEFAULT NULL,
+  "isRead" BOOLEAN NOT NULL DEFAULT false,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages ("chatRoomId");
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages ("createdAt");
+
+-- 15. BOTS TABLE
+CREATE TABLE IF NOT EXISTS bots (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name VARCHAR(191) NOT NULL,
+  description TEXT DEFAULT NULL,
+  "minInvestment" DOUBLE PRECISION NOT NULL DEFAULT 10,
+  "maxInvestment" DOUBLE PRECISION NOT NULL DEFAULT 1000,
+  "dailyRoi" DOUBLE PRECISION NOT NULL DEFAULT 1.5,
+  "durationDays" INT NOT NULL DEFAULT 30,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. BOT PERFORMANCES TABLE
+CREATE TABLE IF NOT EXISTS bot_performances (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "botId" VARCHAR(191) NOT NULL,
+  date DATE NOT NULL,
+  "profitPercentage" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. USER BOTS TABLE
+CREATE TABLE IF NOT EXISTS user_bots (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  "botId" VARCHAR(191) NOT NULL,
+  investment DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "investmentAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "expectedRoi" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  profit DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "totalProfit" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "lockEndDate" TIMESTAMPTZ DEFAULT NULL,
+  status VARCHAR(191) NOT NULL DEFAULT 'active',
+  "startDate" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "endDate" TIMESTAMPTZ DEFAULT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 18. NEWS ITEMS TABLE
+CREATE TABLE IF NOT EXISTS news_items (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  title VARCHAR(255) NOT NULL,
+  content TEXT NOT NULL,
+  "imageUrl" VARCHAR(500) DEFAULT NULL,
+  importance VARCHAR(191) NOT NULL DEFAULT 'normal',
+  status VARCHAR(50) NOT NULL DEFAULT 'published',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 19. NOTIFICATIONS TABLE
+CREATE TABLE IF NOT EXISTS notifications (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  title VARCHAR(191) NOT NULL,
+  message TEXT NOT NULL,
+  type VARCHAR(191) NOT NULL DEFAULT 'info',
+  "isRead" BOOLEAN NOT NULL DEFAULT false,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications ("userId");
+
+-- 20. PAYMENT SETTINGS TABLE
+CREATE TABLE IF NOT EXISTS payment_settings (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  label VARCHAR(191) DEFAULT NULL,
+  method VARCHAR(191) NOT NULL,
+  details VARCHAR(191) DEFAULT NULL,
+  "extraInfo" VARCHAR(191) DEFAULT NULL,
+  currency VARCHAR(50) DEFAULT 'USD',
+  "walletAddress" VARCHAR(255) DEFAULT NULL,
+  "qrCodeUrl" VARCHAR(255) DEFAULT NULL,
+  "minDeposit" DOUBLE PRECISION NOT NULL DEFAULT 10,
+  "maxDeposit" DOUBLE PRECISION NOT NULL DEFAULT 10000,
+  "minWithdrawal" DOUBLE PRECISION NOT NULL DEFAULT 10,
+  "maxWithdrawal" DOUBLE PRECISION NOT NULL DEFAULT 5000,
+  "feePercentage" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "feeFixed" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "sortOrder" INT NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 21. PERIOD COUNTERS TABLE
+CREATE TABLE IF NOT EXISTS period_counters (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "intervalCode" INT NOT NULL,
+  "counterValue" INT NOT NULL DEFAULT 0,
+  date VARCHAR(191) NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_interval_date UNIQUE ("intervalCode", date)
+);
+
+-- 22. BONUS TIERS TABLE
+CREATE TABLE IF NOT EXISTS bonus_tiers (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  level INT UNIQUE NOT NULL,
+  name VARCHAR(191) NOT NULL,
+  "minDeposit" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "bonusPercentage" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 23. USER ACHIEVEMENTS TABLE
+CREATE TABLE IF NOT EXISTS user_achievements (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  "achievementType" VARCHAR(191) NOT NULL,
+  level INT NOT NULL DEFAULT 1,
+  progress DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "isUnlocked" BOOLEAN NOT NULL DEFAULT false,
+  "unlockedAt" TIMESTAMPTZ DEFAULT NULL,
+  "earnedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 24. ACTIVITIES TABLE
+CREATE TABLE IF NOT EXISTS activities (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId" VARCHAR(191) NOT NULL,
+  type VARCHAR(191) NOT NULL,
+  description TEXT NOT NULL,
+  metadata TEXT DEFAULT NULL,
+  "ipAddress" VARCHAR(191) DEFAULT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_activities_userId ON activities ("userId");
+
+-- 25. WEBHOOK LOGS TABLE
+CREATE TABLE IF NOT EXISTS webhook_logs (
+  id VARCHAR(191) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  payload TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================================================
+-- DEFAULT SEED DATA & SYSTEM CONFIGURATION
+-- =========================================================================
+
+-- Commission Levels
+INSERT INTO commission_levels (id, level, percentage, "createdAt", "updatedAt")
+VALUES 
+  (gen_random_uuid()::text, 1, 5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 2, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 3, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (level) DO NOTHING;
+
+-- Default Settings
+INSERT INTO settings (id, key, value, "createdAt", "updatedAt")
+VALUES
+  (gen_random_uuid()::text, 'trade_bonus_a', '1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'trade_bonus_b', '0.5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'trade_bonus_c', '3', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'recharge_bonus_a', '5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'recharge_bonus_b', '3', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'recharge_bonus_c', '2', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'ref_bonus_a', '5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'ref_bonus_b', '3', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'ref_bonus_c', '2', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  (gen_random_uuid()::text, 'smart_bot_enabled', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (key) DO NOTHING;
+
+-- Default Assets
+INSERT INTO assets (id, symbol, name, type, payout, "isActive", "displayOrder")
+VALUES
+  (gen_random_uuid()::text, 'BTC/USD', 'Bitcoin / US Dollar', 'crypto', 85, true, 1),
+  (gen_random_uuid()::text, 'ETH/USD', 'Ethereum / US Dollar', 'crypto', 85, true, 2),
+  (gen_random_uuid()::text, 'EUR/USD', 'Euro / US Dollar', 'forex', 82, true, 3),
+  (gen_random_uuid()::text, 'GBP/USD', 'British Pound / US Dollar', 'forex', 80, true, 4),
+  (gen_random_uuid()::text, 'SOL/USD', 'Solana / US Dollar', 'crypto', 85, true, 5),
+  (gen_random_uuid()::text, 'XRP/USD', 'Ripple / US Dollar', 'crypto', 80, true, 6)
+ON CONFLICT (symbol) DO NOTHING;
+
+-- Disable Row Level Security (RLS) so the Express backend can query all tables freely
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE assets DISABLE ROW LEVEL SECURITY;
+ALTER TABLE candles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE trades DISABLE ROW LEVEL SECURITY;
+ALTER TABLE transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_levels DISABLE ROW LEVEL SECURITY;
+ALTER TABLE commissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE referrals DISABLE ROW LEVEL SECURITY;
+ALTER TABLE referral_deposit_bonuses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_bonuses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE master_traders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_copy_trades DISABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bot_performances DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_bots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE news_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE period_counters DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bonus_tiers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_achievements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE activities DISABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_logs DISABLE ROW LEVEL SECURITY;
+

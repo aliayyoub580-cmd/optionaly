@@ -1,0 +1,9 @@
+{
+  "name": "keepalive",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}

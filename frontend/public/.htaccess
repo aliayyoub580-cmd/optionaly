@@ -1,0 +1,28 @@
+# Disable caching for index.html so SPA updates are immediately served
+<FilesMatch "^index\.html$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </IfModule>
+</FilesMatch>
+
+# Enable immutable long-term caching for hashed static asset bundles
+<FilesMatch "\.(js|css|svg|png|jpg|ico|json)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Do not rewrite existing files or directories
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Redirect all deep routes (/ftsjsy/login, /payment/123, etc.) to index.html for SPA routing
+  RewriteRule ^ index.html [L]
+</IfModule>

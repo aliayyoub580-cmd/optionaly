@@ -1,0 +1,15 @@
+{
+  "short_name": "Optionaly",
+  "name": "Optionaly — Smart Investment Platform",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0B0E11",
+  "theme_color": "#0B0E11",
+  "display": "standalone"
+}

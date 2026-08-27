@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg?v=2" />
+    <link rel="icon" type="image/png" href="/logo.svg?v=2" />
+    <link rel="shortcut icon" href="/logo.svg?v=2" />
+    <link rel="apple-touch-icon" href="/logo.svg?v=2" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Optionaly — Smart Investment Platform. Professional trading with real-time charts and demo account." />
+    <title>Optionaly — Smart Investment Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Build version marker. Check in DevTools console with: window.__APP_VERSION__ -->
+    <script>
+      window.__APP_VERSION__ = "v7";
+      window.__APP_BUILD_DATE__ = "2026-08-15";
+      console.log("[Optionaly] Frontend build " + window.__APP_VERSION__ + " (" + window.__APP_BUILD_DATE__ + ")");
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
