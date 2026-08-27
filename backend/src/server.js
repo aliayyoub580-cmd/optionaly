@@ -195,89 +195,81 @@ async function autoMigrateTables() {
   }
 }
 
-// Start server
-const parsedPort = Number(port);
-const priceEngine = require('./helpers/priceEngine');
+let io = null;
+let server = null;
 
-const http = require('http');
-const socketIO = require('socket.io');
+if (!process.env.VERCEL) {
+  const http = require('http');
+  const socketIO = require('socket.io');
 
-const server = http.createServer(app);
-const io = socketIO(server, {
-  cors: corsOptions
-});
-
-app.set('io', io);
-
-// Serve uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-
-io.on('connection', (socket) => {
-  console.log('[WS] New client connection:', socket.id);
-  
-  socket.on('join_room', (roomId) => {
-    socket.join(roomId);
-    console.log(`[WS] Socket ${socket.id} joined room ${roomId}`);
-  });
-  
-  socket.on('join_admin', () => {
-    socket.join('admin');
-    console.log(`[WS] Socket ${socket.id} joined admin notification room`);
+  server = http.createServer(app);
+  io = socketIO(server, {
+    cors: corsOptions
   });
 
-  socket.on('admin_update_payout', (data) => {
-    if (data?.symbol && data?.payout !== undefined && priceEngine.assets[data.symbol]) {
-      const p = parseFloat(data.payout);
-      if (!isNaN(p) && p > 0 && p <= 100) {
-        priceEngine.assets[data.symbol].payout = p;
-        if (priceEngine.adminSettings[data.symbol]) {
-          priceEngine.adminSettings[data.symbol].payout = p;
+  app.set('io', io);
+
+  io.on('connection', (socket) => {
+    socket.on('join_room', (roomId) => {
+      socket.join(roomId);
+    });
+    
+    socket.on('join_admin', () => {
+      socket.join('admin');
+    });
+
+    socket.on('admin_update_payout', (data) => {
+      if (data?.symbol && data?.payout !== undefined && priceEngine.assets[data.symbol]) {
+        const p = parseFloat(data.payout);
+        if (!isNaN(p) && p > 0 && p <= 100) {
+          priceEngine.assets[data.symbol].payout = p;
+          if (priceEngine.adminSettings[data.symbol]) {
+            priceEngine.adminSettings[data.symbol].payout = p;
+          }
+          io.emit('asset_payout_updated', { symbol: data.symbol, payout: p });
         }
-        io.emit('asset_payout_updated', { symbol: data.symbol, payout: p });
-        console.log(`[WS Admin] Updated payout for ${data.symbol} to ${p}%`);
       }
-    }
-  });
+    });
 
-  socket.on('admin_update_settings', (data) => {
-    if (data?.symbol && data?.settings && priceEngine.adminSettings[data.symbol]) {
-      Object.assign(priceEngine.adminSettings[data.symbol], data.settings);
-      console.log(`[WS Admin] Updated price settings for ${data.symbol}`);
-    }
-  });
+    socket.on('admin_update_settings', (data) => {
+      if (data?.symbol && data?.settings && priceEngine.adminSettings[data.symbol]) {
+        Object.assign(priceEngine.adminSettings[data.symbol], data.settings);
+      }
+    });
 
-  socket.on('admin_set_price', (data) => {
-    if (data?.symbol && data?.price !== undefined && priceEngine.adminSettings[data.symbol]) {
-      priceEngine.adminSettings[data.symbol].manualPrice = parseFloat(data.price);
-      console.log(`[WS Admin] Set manual price for ${data.symbol} to ${data.price}`);
-    }
-  });
+    socket.on('admin_set_price', (data) => {
+      if (data?.symbol && data?.price !== undefined && priceEngine.adminSettings[data.symbol]) {
+        priceEngine.adminSettings[data.symbol].manualPrice = parseFloat(data.price);
+      }
+    });
 
-  socket.on('admin_toggle_bot', async (data) => {
-    const isEnabled = !!data?.enabled;
-    priceEngine.setBotEnabled(isEnabled);
-    try {
-      await query(
-        "INSERT INTO settings (id, `key`, value, updatedAt) VALUES (UUID(), 'smart_bot_enabled', ?, NOW(3)) ON DUPLICATE KEY UPDATE value = ?, updatedAt = NOW(3)",
-        [isEnabled ? 'true' : 'false', isEnabled ? 'true' : 'false']
-      );
-    } catch (e) {
-      console.error('[WS Admin] Failed to persist bot setting:', e.message);
-    }
-    io.emit('bot_status_changed', { enabled: isEnabled });
-    console.log(`[WS Admin] Smart Bot toggled: ${isEnabled ? 'ON' : 'OFF'}`);
-  });
+    socket.on('admin_toggle_bot', async (data) => {
+      const isEnabled = !!data?.enabled;
+      priceEngine.setBotEnabled(isEnabled);
+      try {
+        await query(
+          "INSERT INTO settings (id, `key`, value, updatedAt) VALUES (UUID(), 'smart_bot_enabled', ?, NOW(3)) ON DUPLICATE KEY UPDATE value = ?, updatedAt = NOW(3)",
+          [isEnabled ? 'true' : 'false', isEnabled ? 'true' : 'false']
+        );
+      } catch (e) {}
+      io.emit('bot_status_changed', { enabled: isEnabled });
+    });
 
-  socket.on('bot_update', (data) => {
-    if (data && typeof data === 'object') {
-      priceEngine.setBotPayload(data);
-    }
+    socket.on('bot_update', (data) => {
+      if (data && typeof data === 'object') {
+        priceEngine.setBotPayload(data);
+      }
+    });
   });
-
-  socket.on('disconnect', () => {
-    console.log('[WS] Client disconnected:', socket.id);
-  });
-});
+} else {
+  // Mock io for serverless environment
+  io = {
+    emit: () => {},
+    to: () => ({ emit: () => {} }),
+    in: () => ({ emit: () => {} }),
+  };
+  app.set('io', io);
+}
 
 const { runAutoMigrations } = require('./utils/migrate-platform');
 const { startDepositReconciliationSweep } = require('./controllers/paymentController');
