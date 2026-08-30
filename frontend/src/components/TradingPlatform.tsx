@@ -2629,6 +2629,11 @@ export default function TradingPlatform() {
   useEffect(() => {
     if (!user?.email) return;
     const getWsUrl = () => {
+      // Vercel serverless functions do not provide a persistent Socket.IO
+      // server. Market updates use the same-origin HTTP stream below.
+      if (typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')) {
+        return null;
+      }
       if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
       if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
         return 'http://localhost:4000';
@@ -2636,6 +2641,7 @@ export default function TradingPlatform() {
       return 'https://api.optionaly.com';
     };
     const wsUrl = getWsUrl();
+    if (!wsUrl) return;
     console.log('[WS] Connecting to:', wsUrl);
     const socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
@@ -2740,6 +2746,7 @@ export default function TradingPlatform() {
     const MAX_RETRIES = 5;
     let httpConnected = false;
     let socketFallback: Socket | null = null;
+    const isVercelRuntime = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
 
     // Process /tick response — same logic as the old price_update handler
     const processTickData = (data: { updates?: any[]; allPrices?: any; version?: number; instanceId?: string }) => {
@@ -2840,7 +2847,7 @@ export default function TradingPlatform() {
             retryCount = 0; // reset retries on success
           } catch (e) {
             retryCount++;
-            if (retryCount >= MAX_RETRIES && !socketFallback) {
+            if (retryCount >= MAX_RETRIES && !socketFallback && !isVercelRuntime) {
               // Stop HTTP polling, switch to Socket.IO fallback
               if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
               startSocketFallback();
@@ -2853,7 +2860,7 @@ export default function TradingPlatform() {
       } catch (e) {
         retryCount++;
         console.warn(`[Price] HTTP init failed (attempt ${retryCount})`);
-        if (retryCount >= MAX_RETRIES && !socketFallback) {
+        if (retryCount >= MAX_RETRIES && !socketFallback && !isVercelRuntime) {
           console.log('[Price] Switching to Socket.IO connection');
           startSocketFallback();
         } else {

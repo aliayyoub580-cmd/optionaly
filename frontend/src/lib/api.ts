@@ -1,12 +1,18 @@
 const getInitialApiBase = () => {
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   if (typeof window !== 'undefined') {
+    // A Vercel deployment ships its backend as the same-origin `/api`
+    // function.  Ignore a stale VITE_API_URL copied from the old Hostinger
+    // deployment; otherwise the chart quietly polls another backend and the
+    // request-driven Vercel market engine never receives a tick.
+    if (window.location.hostname.endsWith('.vercel.app')) return '';
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return 'http://localhost:4000';
     }
     // On Vercel or custom domain, default to same-origin relative API
     return '';
   }
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   return '';
 };
 const rawApiBase = getInitialApiBase();
