@@ -2547,6 +2547,9 @@ export default function TradingPlatform() {
   const location = useLocation();
   const navigate = useNavigate();
   const socketRef = useRef<Socket | null>(null);
+  // HTTP and Socket.IO can both deliver a tick. Track the market-engine
+  // instance and accept only increasing versions within that instance.
+  const latestMarketVersionRef = useRef({ instanceId: '', version: -1 });
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
@@ -2732,15 +2735,24 @@ export default function TradingPlatform() {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
     let retryCount = 0;
     const MAX_RETRIES = 5;
-    let httpVersion = 0;
     let httpConnected = false;
     let socketFallback: Socket | null = null;
 
     // Process /tick response — same logic as the old price_update handler
-    const processTickData = (data: { updates: any[]; allPrices: any }) => {
+    const processTickData = (data: { updates?: any[]; allPrices?: any; version?: number; instanceId?: string }) => {
+      const instanceId = String(data?.instanceId || 'legacy');
+      const version = Number(data?.version);
+      if (Number.isFinite(version)) {
+        if (latestMarketVersionRef.current.instanceId !== instanceId) {
+          latestMarketVersionRef.current = { instanceId, version: -1 };
+        }
+        if (version <= latestMarketVersionRef.current.version) return;
+        latestMarketVersionRef.current.version = version;
+      }
+      if (!Array.isArray(data.updates)) return;
       for (const update of data.updates) {
         if (update.candles && typeof update.candles === 'object') {
           updatePrice(update);
@@ -2776,34 +2788,21 @@ export default function TradingPlatform() {
     // ─── Socket.IO fallback setup ───
     const startSocketFallback = () => {
       console.log('[Price] HTTP failed, falling back to Socket.IO');
-      socketFallback = io(import.meta.env.VITE_WS_URL || 'https://api.optionaly.com', { path: '/api/ws/socket.io', transports: ['polling'], reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 2000 });
+      socketFallback = io(import.meta.env.VITE_WS_URL || 'https://api.optionaly.com', {
+        // Matches the Socket.IO server's default `/socket.io` path. The API
+        // proxy path was never mounted by this backend, so its fallback could
+        // connect nowhere in production.
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+      });
       socketRef.current = socketFallback;
       socketFallback.on('connect', () => console.log('[WS Fallback] Connected'));
       socketFallback.on('init', (data) => processInitData(data));
-      socketFallback.on('price_update', (data) => {
-        if (data.candles && typeof data.candles === 'object') {
-          updatePrice(data);
-        } else if (data.candle) {
-          const nowSec = Math.floor(Date.now() / 1000);
-          const candles: Record<number, any> = {};
-          for (const tf of [5, 15, 30, 60, 120, 180, 300]) {
-            const bucketTime = Math.floor(nowSec / tf) * tf;
-            candles[tf] = {
-              time: bucketTime,
-              open: data.candle.open ?? data.price,
-              high: Math.max(data.candle.high ?? data.price, data.price),
-              low: Math.min(data.candle.low ?? data.price, data.price),
-              close: data.price,
-            };
-          }
-          updatePrice({
-            symbol: data.symbol,
-            price: data.price,
-            candles,
-            allPrices: data.allPrices,
-          });
-        }
-      });
+      // The server emits a full { updates, allPrices, version } tick, not a
+      // single `candle`. Use the same processor as HTTP polling.
+      socketFallback.on('price_update', processTickData);
       socketFallback.on('settings_updated', (data) => setAdminSettings(data.symbol, data.settings));
       socketFallback.on('asset_list_updated', (data) => {
         const existing = useTradingStore.getState().assets;
@@ -2812,35 +2811,45 @@ export default function TradingPlatform() {
     };
 
     // ─── HTTP polling ───
+    const getLivePrice = (action: 'init' | 'tick') => apiFetch(
+      `/api/prices?action=${action}&_=${Date.now()}`,
+      {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, max-age=0', Pragma: 'no-cache' },
+      },
+    );
+
     const initHTTP = async () => {
       try {
-        const res = await apiFetch('/api/prices?action=init');
+        const res = await getLivePrice('init');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
         httpConnected = true;
         console.log('[Price] HTTP init successful');
         processInitData(data);
-        // Start polling
-        pollTimer = setInterval(async () => {
-          if (cancelled) return;
+        // Sequential polling prevents delayed shared-hosting responses from
+        // overlapping and applying stale candle data.
+        const poll = async () => {
           try {
-            const tickRes = await apiFetch(`/api/prices?action=tick&last=${httpVersion}`);
+            const tickRes = await getLivePrice('tick');
             if (!tickRes.ok) throw new Error(`HTTP ${tickRes.status}`);
             const tickData = await tickRes.json();
             if (cancelled) return;
-            httpVersion = tickData.version;
             processTickData(tickData);
             retryCount = 0; // reset retries on success
           } catch (e) {
             retryCount++;
             if (retryCount >= MAX_RETRIES && !socketFallback) {
               // Stop HTTP polling, switch to Socket.IO fallback
-              if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+              if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
               startSocketFallback();
             }
+          } finally {
+            if (!cancelled && !socketFallback) pollTimer = setTimeout(poll, 250);
           }
-        }, 1000);
+        };
+        poll();
       } catch (e) {
         retryCount++;
         console.warn(`[Price] HTTP init failed (attempt ${retryCount})`);
@@ -2858,7 +2867,7 @@ export default function TradingPlatform() {
 
     return () => {
       cancelled = true;
-      if (pollTimer) clearInterval(pollTimer);
+      if (pollTimer) clearTimeout(pollTimer);
       if (socketFallback) socketFallback.disconnect();
     };
   }, [user?.email]);

@@ -8,7 +8,7 @@ async function runAudit() {
   // 1. Health Check
   const priceEngine = require('../helpers/priceEngine');
   await priceEngine.start(null);
-  console.log('\n[Phase 1] System Health: OK (Engine running, MySQL connected)');
+  console.log('\n[Phase 1] System Health: OK (Engine running, Supabase connected)');
 
   // 2. Query Test User
   const users = await query("SELECT id, name, email, demoBalance, realBalance, balance, accountType FROM users LIMIT 1");

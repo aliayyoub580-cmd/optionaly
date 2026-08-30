@@ -6,6 +6,15 @@ const { query } = require('../helpers/db');
  */
 async function getPrices(req, res) {
   try {
+    // Live ticks are stateful: caches or proxy buffering make a chart appear
+    // frozen even while the browser countdown continues locally.
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0, private',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+      'X-Accel-Buffering': 'no',
+    });
     const action = req.query.action || 'tick';
 
     if (action === 'init') {

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
-const apiKey = process.env.NOWPAYMENTS_API_KEY || 'RRPRD88-XKHMNSK-N1338BV-QV8DRBG';
-const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET || 'zB7x/HyMlk25TtwhYetJNqHVW7FvcmtY';
+const apiKey = process.env.NOWPAYMENTS_API_KEY;
+const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
 const isSandbox = false;
 
 const baseUrl = isSandbox 

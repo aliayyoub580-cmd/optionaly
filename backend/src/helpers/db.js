@@ -11,8 +11,12 @@ if (fs.existsSync(rootEnv)) {
   require('dotenv').config({ path: backendEnv });
 }
 
-const supabaseUrl = process.env.SUPABASE_URL || 'https://aouqhhedzxljbwxjwyrn.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_SBUDYcPEKl_Fnpv-IaTHAw_vnUxpKo-';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) must be configured.');
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -317,7 +321,7 @@ async function queryViaSupabaseSdk(sql, params = []) {
 function transformQuery(sql, params = []) {
   let transformedSql = sql;
 
-  // 1. Emulate MySQL SHOW TABLES
+  // 1. Support legacy table-list diagnostics through PostgreSQL metadata.
   if (/^\s*SHOW\s+TABLES\s*$/i.test(transformedSql.trim())) {
     return {
       sql: "SELECT table_name AS \"Tables_in_database\" FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
@@ -325,7 +329,7 @@ function transformQuery(sql, params = []) {
     };
   }
 
-  // 2. Emulate MySQL SHOW COLUMNS FROM <table>
+  // 2. Support legacy column diagnostics through PostgreSQL metadata.
   const showColsMatch = transformedSql.match(/^\s*SHOW\s+COLUMNS\s+FROM\s+[`"']?([a-zA-Z0-9_]+)[`"']?\s*$/i);
   if (showColsMatch) {
     const tableName = showColsMatch[1];
@@ -335,7 +339,7 @@ function transformQuery(sql, params = []) {
     };
   }
 
-  // 3. MySQL functions
+  // 3. Normalize common timestamp and UUID expressions for PostgreSQL.
   transformedSql = transformedSql.replace(/\bNOW\(\d*\)/gi, 'CURRENT_TIMESTAMP');
   transformedSql = transformedSql.replace(/\bCURRENT_TIMESTAMP\(\d*\)/gi, 'CURRENT_TIMESTAMP');
   transformedSql = transformedSql.replace(/\bUUID\(\)/gi, "gen_random_uuid()::text");

@@ -249,8 +249,9 @@ async function insertCandleBatch(batchVals) {
   const placeholders = batchVals.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(',');
   const flattened = batchVals.reduce((acc, val) => acc.concat(val), []);
   const sql = `
-    INSERT IGNORE INTO candles (id, symbol, timeframe, timestamp, open, high, low, close)
+    INSERT INTO candles (id, symbol, timeframe, timestamp, open, high, low, close)
     VALUES ${placeholders}
+    ON CONFLICT (symbol, timeframe, timestamp) DO NOTHING
   `;
   await query(sql, flattened);
 }
@@ -259,12 +260,13 @@ async function insertCandleBatch(batchVals) {
 async function saveCandleToDb(sym, tf, timestamp, open, high, low, close) {
   try {
     const id = `${sym}_${tf}_${timestamp}`;
-    // INSERT IGNORE, not ON DUPLICATE KEY UPDATE: once a candle is closed and
+    // Conflict-ignore: once a candle is closed and
     // stored it is historical fact and must never be rewritten by a later
     // restart or a duplicate timer.
     await query(
-      `INSERT IGNORE INTO candles (id, symbol, timeframe, timestamp, open, high, low, close)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO candles (id, symbol, timeframe, timestamp, open, high, low, close)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (symbol, timeframe, timestamp) DO NOTHING`,
       [id, sym, tf, timestamp, open, high, low, close]
     );
   } catch (e) {
@@ -404,7 +406,7 @@ function tick() {
             const completedCandle = { time: cc.start, open: cc.open, high: cc.high, low: cc.low, close: newPrice };
             history.push(completedCandle);
 
-            // Save completed candle into MySQL DB
+            // Save completed candle into Supabase PostgreSQL
             saveCandleToDb(sym, tf, cc.start, cc.open, cc.high, cc.low, newPrice);
 
             // Fill missed gaps
@@ -776,13 +778,15 @@ function buildTickResponse() {
         candles[tf] = { time: cc.start, open: cc.open, high: cc.high, low: cc.low, close: price };
       }
 
-      updates.push({ symbol: sym, price, spread: settings.spread || 0, candles, allPrices });
+      // Keep the shared price map at the response top level.  Duplicating it
+      // for every asset creates oversized ticks that queue on shared hosting.
+      updates.push({ symbol: sym, price, spread: settings.spread || 0, candles });
     } catch (e) {
       console.error(`[BUILD TICK ${sym}]`, e?.message || e);
     }
   }
 
-  return { version, allPrices, updates };
+  return { instanceId: engineInstanceId, version, allPrices, updates };
 }
 
 let intervalId = null;
@@ -805,7 +809,7 @@ async function start(io) {
 
   console.log(`[CANDLE ENGINE] Started server-side singleton engine (Instance ID: ${engineInstanceId})`);
 
-  // Initialize DB seeding and load historical candles and bot status from MySQL
+  // Initialize DB seeding and load historical candles and bot status from Supabase.
   await seedDatabaseCandles();
   await repairCandleGaps();
   await loadInitialCandlesFromDb();

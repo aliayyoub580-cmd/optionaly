@@ -44,11 +44,11 @@ async function testPersistence() {
   const sample = dbCandles[0];
   if (sample) {
     const testId = `EUR/USD_60_${sample.time}`;
-    await query('INSERT IGNORE INTO candles (id, symbol, timeframe, timestamp, open, high, low, close) VALUES (?, "EUR/USD", 60, ?, 1.09, 1.091, 1.089, 1.0905)', [testId, sample.time]);
+    await query('INSERT INTO candles (id, symbol, timeframe, timestamp, open, high, low, close) VALUES (?, \'EUR/USD\', 60, ?, 1.09, 1.091, 1.089, 1.0905) ON CONFLICT (symbol, timeframe, timestamp) DO NOTHING', [testId, sample.time]);
     const dupCount = await query('SELECT COUNT(*) AS count FROM candles WHERE symbol = "EUR/USD" AND timeframe = 60 AND timestamp = ?', [sample.time]);
     console.log(`[TEST 3 RESULT] Duplicate timestamp check for ${sample.time}: Count in DB = ${dupCount[0]?.count}`);
     if (dupCount[0]?.count === 1) {
-      console.log('✓ TEST 3 PASSED: MySQL UNIQUE KEY idx_sym_tf_ts prevented duplicate candle creation!');
+      console.log('✓ TEST 3 PASSED: PostgreSQL unique constraint prevented duplicate candle creation!');
     }
   }
 

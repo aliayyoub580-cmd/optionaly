@@ -10,8 +10,12 @@ if (fs.existsSync(rootEnv)) {
   require('dotenv').config({ path: backendEnv });
 }
 
-const supabaseUrl = process.env.SUPABASE_URL || 'https://aouqhhedzxljbwxjwyrn.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_SBUDYcPEKl_Fnpv-IaTHAw_vnUxpKo-';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) must be configured.');
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {

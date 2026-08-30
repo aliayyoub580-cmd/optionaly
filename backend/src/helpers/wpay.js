@@ -3,7 +3,7 @@ const https = require('https');
 
 const baseUrl = (process.env.WPAY_BASE_URL || 'https://api.wpay.life').replace(/\/$/, '');
 const merchantId = (process.env.WPAY_MERCHANT_ID || '5063').toString();
-const apiKey = process.env.WPAY_API_KEY || '1a1cd5e2f154863a77a6158392cdbf26';
+const apiKey = process.env.WPAY_API_KEY;
 
 /**
  * Generates MD5 signature according to WPay / OKExPay specification.

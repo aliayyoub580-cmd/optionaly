@@ -5,9 +5,9 @@ async function inspectSchema() {
   console.log('ACTUAL PRODUCTION DATABASE SCHEMA INSPECTION');
   console.log('==================================================');
 
-  // 1. Show all tables in database
-  const tablesRes = await query('SHOW TABLES');
-  const tableNames = tablesRes.map(row => Object.values(row)[0]);
+  // 1. Show all public PostgreSQL tables.
+  const tablesRes = await query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
+  const tableNames = tablesRes.map(row => row.table_name);
 
   console.log('\n--- ALL TABLES IN DATABASE ---');
   console.log(tableNames.join(', '));
@@ -25,17 +25,18 @@ async function inspectSchema() {
     console.log(`\n==================================================`);
     console.log(`TABLE: ${tableName}`);
     console.log(`==================================================`);
-    const columns = await query(`DESCRIBE \`${tableName}\``);
+    const columns = await query(
+      "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? ORDER BY ordinal_position",
+      [tableName],
+    );
     console.table(columns.map(c => ({
-      Field: c.Field,
-      Type: c.Type,
-      Null: c.Null,
-      Key: c.Key,
-      Default: c.Default,
-      Extra: c.Extra
+      Field: c.column_name,
+      Type: c.data_type,
+      Null: c.is_nullable,
+      Default: c.column_default,
     })));
 
-    const countRes = await query(`SELECT COUNT(*) AS total FROM \`${tableName}\``);
+    const countRes = await query(`SELECT COUNT(*) AS total FROM "${tableName}"`);
     console.log(`Row Count: ${countRes[0]?.total}`);
   }
 

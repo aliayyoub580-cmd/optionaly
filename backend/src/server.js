@@ -9,6 +9,9 @@ const morgan = require('morgan');
 const compression = require('compression');
 const path = require('path');
 const { port } = require('./config');
+const parsedPort = Number(port);
+const { query } = require('./helpers/db');
+const priceEngine = require('./helpers/priceEngine');
 const errorHandler = require('./middleware/errorHandler');
 const apiRoutes = require('./routes');
 
@@ -248,8 +251,8 @@ if (!process.env.VERCEL) {
       priceEngine.setBotEnabled(isEnabled);
       try {
         await query(
-          "INSERT INTO settings (id, `key`, value, updatedAt) VALUES (UUID(), 'smart_bot_enabled', ?, NOW(3)) ON DUPLICATE KEY UPDATE value = ?, updatedAt = NOW(3)",
-          [isEnabled ? 'true' : 'false', isEnabled ? 'true' : 'false']
+          'INSERT INTO settings (id, "key", value, "updatedAt") VALUES (gen_random_uuid()::text, \'smart_bot_enabled\', ?, CURRENT_TIMESTAMP) ON CONFLICT ("key") DO UPDATE SET value = EXCLUDED.value, "updatedAt" = CURRENT_TIMESTAMP',
+          [isEnabled ? 'true' : 'false']
         );
       } catch (e) {}
       io.emit('bot_status_changed', { enabled: isEnabled });
@@ -271,7 +274,6 @@ if (!process.env.VERCEL) {
   app.set('io', io);
 }
 
-const { runAutoMigrations } = require('./utils/migrate-platform');
 const { startDepositReconciliationSweep } = require('./controllers/paymentController');
 
 // Only start standalone HTTP server and background workers when running directly (not in Vercel serverless)
@@ -283,20 +285,16 @@ if (require.main === module && !process.env.VERCEL) {
       console.log(`[Backend] Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`[Backend] Database: Supabase / PostgreSQL`);
 
-      runAutoMigrations()
-        .catch((e) => console.error('[Backend] Migration error:', e.message))
-        .finally(() => {
-          priceEngine.start(io);
-          startDepositReconciliationSweep();
-          const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
-          const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
-          setInterval(() => {
-            autoProcessUnbonusedDeposits().catch(() => {});
-            sweepPendingCryptoDeposits().catch(() => {});
-          }, 10000);
-          autoProcessUnbonusedDeposits().catch(() => {});
-          sweepPendingCryptoDeposits().catch(() => {});
-        });
+      priceEngine.start(io);
+      startDepositReconciliationSweep();
+      const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
+      const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
+      setInterval(() => {
+        autoProcessUnbonusedDeposits().catch(() => {});
+        sweepPendingCryptoDeposits().catch(() => {});
+      }, 10000);
+      autoProcessUnbonusedDeposits().catch(() => {});
+      sweepPendingCryptoDeposits().catch(() => {});
     }).on('error', (err) => {
       console.error(`[Backend] FATAL: Failed to start server on TCP port ${parsedPort}: ${err.message}`);
       process.exit(1);
@@ -307,20 +305,16 @@ if (require.main === module && !process.env.VERCEL) {
       console.log(`[Backend] Express server running on Unix Socket: ${port}`);
       console.log(`[Backend] Database: Supabase / PostgreSQL`);
 
-      runAutoMigrations()
-        .catch((e) => console.error('[Backend] Migration error:', e.message))
-        .finally(() => {
-          priceEngine.start(io);
-          startDepositReconciliationSweep();
-          const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
-          const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
-          setInterval(() => {
-            autoProcessUnbonusedDeposits().catch(() => {});
-            sweepPendingCryptoDeposits().catch(() => {});
-          }, 10000);
-          autoProcessUnbonusedDeposits().catch(() => {});
-          sweepPendingCryptoDeposits().catch(() => {});
-        });
+      priceEngine.start(io);
+      startDepositReconciliationSweep();
+      const { autoProcessUnbonusedDeposits } = require('./helpers/referral-bonus');
+      const { sweepPendingCryptoDeposits } = require('./helpers/crypto-deposit');
+      setInterval(() => {
+        autoProcessUnbonusedDeposits().catch(() => {});
+        sweepPendingCryptoDeposits().catch(() => {});
+      }, 10000);
+      autoProcessUnbonusedDeposits().catch(() => {});
+      sweepPendingCryptoDeposits().catch(() => {});
     }).on('error', (err) => {
       console.error(`[Backend] FATAL: Failed to start server on socket ${port}: ${err.message}`);
       process.exit(1);

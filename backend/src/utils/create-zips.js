@@ -60,7 +60,7 @@ const versionContent = `Optionally Production Version
 Version: ${version}
 Build Date: ${new Date().toISOString()}
 Build Type: Production
-Authoritative Engine: Internal Persistent MySQL Market Engine
+Authoritative Engine: Internal Persistent Supabase PostgreSQL Market Engine
 `;
 fs.writeFileSync(path.join(vFolderPath, 'VERSION.txt'), versionContent);
 fs.writeFileSync(path.join(rootDir, 'VERSION.txt'), versionContent);
@@ -70,9 +70,9 @@ Version: ${version}
 Build Date: ${new Date().toISOString()}
 
 Key Updates & Fixes:
-- Authoritative persistent MySQL market candle engine (priceEngine.js)
+- Authoritative persistent Supabase PostgreSQL market candle engine (priceEngine.js)
 - Zero frontend candle generation (client-price-engine.ts stubbed out)
-- 30-day historical candle storage in MySQL table \`candles\`
+- 30-day historical candle storage in Supabase PostgreSQL table \`candles\`
 - Server restart continuation from latest database candle close price
 - Zero-reset candle history on browser refresh, login, logout, or navigation
 - Exposed GET /api/version and GET /api/price/status debug endpoints

@@ -56,17 +56,17 @@ async function testLifecycle() {
   }
 
   // TEST 4: Database Unique Constraint Protection
-  console.log('\n--- TEST 4: MySQL Duplicate Timestamp Prevention ---');
+  console.log('\n--- TEST 4: PostgreSQL Duplicate Timestamp Prevention ---');
   const testTs = Math.floor(Date.now() / 1000);
   const testId = `EUR/USD_5_${testTs}`;
   
-  await query('INSERT IGNORE INTO candles (id, symbol, timeframe, timestamp, open, high, low, close) VALUES (?, "EUR/USD", 5, ?, 1.08, 1.085, 1.075, 1.082)', [testId, testTs]);
-  await query('INSERT IGNORE INTO candles (id, symbol, timeframe, timestamp, open, high, low, close) VALUES (?, "EUR/USD", 5, ?, 1.08, 1.085, 1.075, 1.082)', [testId, testTs]);
+  await query('INSERT INTO candles (id, symbol, timeframe, timestamp, open, high, low, close) VALUES (?, \'EUR/USD\', 5, ?, 1.08, 1.085, 1.075, 1.082) ON CONFLICT (symbol, timeframe, timestamp) DO NOTHING', [testId, testTs]);
+  await query('INSERT INTO candles (id, symbol, timeframe, timestamp, open, high, low, close) VALUES (?, \'EUR/USD\', 5, ?, 1.08, 1.085, 1.075, 1.082) ON CONFLICT (symbol, timeframe, timestamp) DO NOTHING', [testId, testTs]);
 
   const dupCheck = await query('SELECT COUNT(*) AS count FROM candles WHERE id = ?', [testId]);
   console.log(`[TEST 4 RESULT] Inserted duplicate candle ID '${testId}' twice. DB record count: ${dupCheck[0]?.count}`);
   if (dupCheck[0]?.count === 1) {
-    console.log('✓ TEST 4 PASSED: MySQL unique constraint idx_sym_tf_ts successfully prevented duplicate candle insertion!');
+    console.log('✓ TEST 4 PASSED: PostgreSQL unique constraint prevented duplicate candle insertion!');
   }
 
   console.log('\n==================================================');

@@ -4,7 +4,7 @@ const { getPaymentStatus } = require('./nowpayments');
 
 /**
  * Atomically settles a confirmed/finished crypto deposit and credits user balances.
- * @param {Object} tx Transaction row from MySQL
+ * @param {Object} tx Transaction row from Supabase PostgreSQL
  * @param {Object} paymentDetails Details from NOWPayments webhook or API status response
  * @returns {Promise<boolean>} True if settled, false if already completed or skipped
  */
