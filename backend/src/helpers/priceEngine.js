@@ -834,8 +834,26 @@ async function start(io) {
   console.log(`[CANDLE ENGINE] Singleton active (instance ID: ${engineInstanceId}, active timers: 2, socket clients: ${clientCount})`);
 }
 
+/**
+ * Vercel functions do not keep the standalone server or setInterval loop
+ * alive.  Advance the in-memory market once for every API request instead.
+ * A warm function keeps a continuous candle; a cold function seeds history
+ * immediately so it still returns valid live candles rather than a frozen
+ * uninitialised price.
+ */
+function advanceForServerlessRequest() {
+  if (!engineStarted) {
+    engineStarted = true;
+    seedHistory();
+    console.log(`[CANDLE ENGINE] Serverless request-driven engine initialized (Instance ID: ${engineInstanceId})`);
+  }
+  tick();
+  return buildTickResponse();
+}
+
 module.exports = {
   start,
+  advanceForServerlessRequest,
   setIO,
   repairCandleGaps,
   buildInitResponse,

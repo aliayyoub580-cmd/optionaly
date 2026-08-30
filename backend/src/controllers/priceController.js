@@ -17,10 +17,16 @@ async function getPrices(req, res) {
     });
     const action = req.query.action || 'tick';
 
+    // Vercel never executes the standalone HTTP listener where the normal
+    // interval is started.  Drive the market from requests in that runtime.
+    const serverlessTick = process.env.VERCEL
+      ? priceEngine.advanceForServerlessRequest()
+      : null;
+
     if (action === 'init') {
       return res.json(priceEngine.buildInitResponse());
     } else {
-      return res.json(priceEngine.buildTickResponse());
+      return res.json(serverlessTick || priceEngine.buildTickResponse());
     }
   } catch (error) {
     console.error('[PriceController] Error generating prices:', error.message);
