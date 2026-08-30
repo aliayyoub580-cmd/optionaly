@@ -47,14 +47,21 @@ async function getMessages(req, res, next) {
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'chat');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Vercel's deployment directory is read-only.  Resolve and create a writable
+// directory only when an upload request arrives; `/tmp` is available for the
+// request lifetime in serverless environments.
+const uploadsDir = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'optionaly', 'chat')
+  : path.join(__dirname, '..', '..', 'uploads', 'chat');
+
+function ensureUploadDirectory(cb) {
+  fs.mkdir(uploadsDir, { recursive: true }, (error) => cb(error || null, uploadsDir));
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
+  destination: (req, file, cb) => ensureUploadDirectory(cb),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');

@@ -5,14 +5,20 @@ const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-const newsUploadsDir = path.join(__dirname, '..', '..', 'uploads', 'news');
-if (!fs.existsSync(newsUploadsDir)) {
-  fs.mkdirSync(newsUploadsDir, { recursive: true });
+// The Vercel bundle is read-only.  Do not mkdir while the module is loading;
+// use the request-writable temporary filesystem when running serverlessly.
+const newsUploadsDir = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'optionaly', 'news')
+  : path.join(__dirname, '..', '..', 'uploads', 'news');
+
+function ensureNewsUploadDirectory(cb) {
+  fs.mkdir(newsUploadsDir, { recursive: true }, (error) => cb(error || null, newsUploadsDir));
 }
 
 const newsStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, newsUploadsDir),
+  destination: (req, file, cb) => ensureNewsUploadDirectory(cb),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
