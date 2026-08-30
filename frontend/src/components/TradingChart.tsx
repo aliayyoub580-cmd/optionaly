@@ -319,8 +319,10 @@ export default function TradingChart() {
         const bucketTime = Math.floor(c.time / tf) * tf;
         const open = Number(c.open);
         const close = Number(c.close);
-        let high = Math.max(Number(c.high), open, close);
-        let low = Math.min(Number(c.low), open, close);
+        const rawHigh = Number(c.high);
+        const rawLow = Number(c.low);
+        let high = Math.max(rawHigh > 0 ? rawHigh : close, open, close);
+        let low = Math.min(rawLow > 0 ? rawLow : close, open, close);
 
         if (!map.has(bucketTime)) {
           map.set(bucketTime, { time: bucketTime, open, high, low, close });
@@ -457,12 +459,22 @@ export default function TradingChart() {
       if (!prior) return;
 
       const time = Math.max(lastCandleTimeRef.current, nowBucket, Number(prior.time) || 0);
-      const open = time > Number(prior.time) ? prior.close : prior.open;
+      const priorClose = Number(prior.close);
+      const basePrice = Number.isFinite(priorClose) && priorClose > 0
+        ? priorClose
+        : Number(asset.currentPrice);
+      if (!Number.isFinite(basePrice) || basePrice <= 0) return;
+      const priorOpen = Number(prior.open);
+      const open = time > Number(prior.time)
+        ? basePrice
+        : (Number.isFinite(priorOpen) && priorOpen > 0 ? priorOpen : basePrice);
       const amplitude = Math.max(Math.abs(open) * 0.000002, minMove);
       const delta = (Math.random() - 0.5) * amplitude * 4;
-      const close = Math.max(minMove, Math.round((prior.close + delta) / minMove) * minMove);
-      const high = Math.max(prior.high, open, close);
-      const low = Math.min(prior.low, open, close);
+      const close = Math.max(minMove, Math.round((basePrice + delta) / minMove) * minMove);
+      const priorHigh = Number(prior.high);
+      const priorLow = Number(prior.low);
+      const high = Math.max(Number.isFinite(priorHigh) && priorHigh > 0 ? priorHigh : open, open, close);
+      const low = Math.min(Number.isFinite(priorLow) && priorLow > 0 ? priorLow : open, open, close);
       const visual = { time, open, high, low, close };
 
       try {

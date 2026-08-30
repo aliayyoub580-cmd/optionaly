@@ -264,8 +264,13 @@ export const useTradingStore = create<TradingState>((set) => ({
         const openPrice = Number(candle.open ?? price);
         const validOpen = isNaN(openPrice) ? price : openPrice;
 
-        let highPrice = Math.max(Number(candle.high ?? price), validOpen, price);
-        let lowPrice = Math.min(Number(candle.low ?? price), validOpen, price);
+        // A cold serverless instance can briefly expose its empty candle
+        // sentinel (high/low = 0). Zero is never a valid market price and
+        // would make Lightweight Charts draw a giant wick to the bottom.
+        const rawHigh = Number(candle.high);
+        const rawLow = Number(candle.low);
+        let highPrice = Math.max(rawHigh > 0 ? rawHigh : price, validOpen, price);
+        let lowPrice = Math.min(rawLow > 0 ? rawLow : price, validOpen, price);
 
         if (isNaN(highPrice)) highPrice = Math.max(validOpen, price);
         if (isNaN(lowPrice)) lowPrice = Math.min(validOpen, price);
