@@ -135,10 +135,13 @@ export default function TradingChart() {
   const historicalLoadedRef = useRef<boolean>(false);
   const dbCandlesRef = useRef<CandlestickData<Time>[]>([]);
   const lastCandleTimeRef = useRef<number>(0);
+  const lastServerCandleAtRef = useRef<number>(0);
+  const visualCandleRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
 
   const [overlayPositions, setOverlayPositions] = useState<TradeOverlayPos[]>([]);
 
   const { assets, selectedAsset, chartTimeframe, activeTrades } = useTradingStore();
+  const hasSelectedAsset = Boolean(assets[selectedAsset]);
 
   // 1. Initialize Lightweight Chart
   useEffect(() => {
@@ -378,7 +381,10 @@ export default function TradingChart() {
     })();
 
     return () => { cancelled = true; };
-  }, [selectedAsset, chartTimeframe, updateTradeMarkersAndOverlays]);
+  // `assets` is loaded asynchronously after the chart mounts. Re-run once
+  // when that selected asset becomes available; without this, a cold Vercel
+  // request can leave the chart initialized from an empty market snapshot.
+  }, [selectedAsset, chartTimeframe, hasSelectedAsset, updateTradeMarkersAndOverlays]);
 
   // 4. Live update current candle in-place smoothly
   useEffect(() => {
@@ -421,11 +427,54 @@ export default function TradingChart() {
     try {
       seriesRef.current.update(updateObj);
       lastCandleTimeRef.current = bucketTime;
+      lastServerCandleAtRef.current = Date.now();
+      visualCandleRef.current = { time: bucketTime, open, high, low, close };
       updateTradeMarkersAndOverlays();
     } catch (err) {
       console.warn('[TradingChart] Live update skipped safely:', err);
     }
   }, [assets, selectedAsset, chartTimeframe, updateTradeMarkersAndOverlays]);
+
+  // Vercel functions can cold-start or be temporarily routed to different
+  // instances. Keep the displayed *current* candle alive during a short gap
+  // between authoritative server ticks. This only paints the chart; incoming
+  // server prices immediately replace it and trade settlement remains server
+  // authoritative.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!historicalLoadedRef.current || !seriesRef.current) return;
+      if (Date.now() - lastServerCandleAtRef.current < 1200) return;
+
+      const asset = useTradingStore.getState().assets[selectedAsset];
+      if (!asset) return;
+
+      const tf = chartTimeframe;
+      const serverCandle = asset.currentCandles?.[tf];
+      const digits = asset.digits || 5;
+      const minMove = Math.pow(10, -digits);
+      const nowBucket = Math.floor(Date.now() / 1000 / tf) * tf;
+      const prior = visualCandleRef.current || serverCandle;
+      if (!prior) return;
+
+      const time = Math.max(lastCandleTimeRef.current, nowBucket, Number(prior.time) || 0);
+      const open = time > Number(prior.time) ? prior.close : prior.open;
+      const amplitude = Math.max(Math.abs(open) * 0.000002, minMove);
+      const delta = (Math.random() - 0.5) * amplitude * 4;
+      const close = Math.max(minMove, Math.round((prior.close + delta) / minMove) * minMove);
+      const high = Math.max(prior.high, open, close);
+      const low = Math.min(prior.low, open, close);
+      const visual = { time, open, high, low, close };
+
+      try {
+        seriesRef.current.update({ ...visual, time: time as Time });
+        lastCandleTimeRef.current = time;
+        visualCandleRef.current = visual;
+        updateTradeMarkersAndOverlays();
+      } catch (e) {}
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [selectedAsset, chartTimeframe, updateTradeMarkersAndOverlays]);
 
   return (
     <div className="relative w-full h-full select-none" style={{ background: '#0B0E11' }}>
